@@ -1,0 +1,41 @@
+intf_libs = # Interface dependencies.
+impl_libs = # Implementation dependencies.
+#import xxxx_libs += libhello%lib{hello}
+
+lib{rpmalloc}: {h c}{**} $impl_libs $intf_libs
+
+# Build options.
+#
+c.poptions =+ "-I$out_root" "-I$src_root"
+
+#obja{*}: c.poptions += -DRPMALLOC_STATIC_BUILD
+#objs{*}: c.poptions += -DRPMALLOC_SHARED_BUILD
+
+# Export options.
+#
+lib{rpmalloc}:
+{
+  c.export.poptions = "-I$out_root" "-I$src_root"
+  c.export.libs = $intf_libs
+}
+
+#liba{rpmalloc}: c.export.poptions += -DRPMALLOC_STATIC
+#libs{rpmalloc}: c.export.poptions += -DRPMALLOC_SHARED
+
+# For pre-releases use the complete version to make sure they cannot
+# be used in place of another pre-release or the final version. See
+# the version module for details on the version.* variable values.
+#
+if $version.pre_release
+  lib{rpmalloc}: bin.lib.version = "-$version.project_id"
+else
+  lib{rpmalloc}: bin.lib.version = "-$version.major.$version.minor"
+
+# Install into the rpmalloc/ subdirectory of, say, /usr/include/
+# recreating subdirectories.
+#
+h{*}:
+{
+  install         = include/rpmalloc/
+  install.subdirs = true
+}

@@ -1,0 +1,6 @@
+$out_root/
+{
+  include rpmalloc/
+}
+
+export $out_root/rpmalloc/$import.target
