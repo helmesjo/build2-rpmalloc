@@ -2,25 +2,74 @@ intf_libs = # Interface dependencies.
 impl_libs = # Implementation dependencies.
 #import xxxx_libs += libhello%lib{hello}
 
-lib{rpmalloc}: {h c}{**} $impl_libs $intf_libs
+lib{rpmalloc}: libul{rpmalloc}: h{rpmalloc rpnew} c{rpmalloc} file{malloc.c} $impl_libs $intf_libs
 
 # Build options.
 #
-c.poptions =+ "-I$out_root" "-I$src_root"
+c.poptions =+ "-I$out_base" "-I$src_base"
 
-#obja{*}: c.poptions += -DRPMALLOC_STATIC_BUILD
-#objs{*}: c.poptions += -DRPMALLOC_SHARED_BUILD
+# rpmalloc.c calls pthread_key_create()/pthread_setspecific()/pthread_key_delete()
+# to store the per-thread heap pointer on POSIX platforms. Use -pthread rather
+# than -lpthread so the compiler can turn it into a no-op on targets where
+# pthread is already part of libc (macOS, glibc >= 2.34). Kept out of export
+# options since rpmalloc.h/rpnew.h expose no pthread API: static consumers
+# still pick it up via this non-export c.libs entry, which build2 propagates
+# to the final link of anything linking liba{rpmalloc}.
+#
+if ($c.target.system != 'win32-msvc')
+  c.libs += -pthread
+
+# glibc gates the huge/transparent-huge-page madvise() flags and a few other
+# APIs used by rpmalloc.c behind _GNU_SOURCE.
+#
+if ($c.target.class == 'linux')
+  c.poptions += -D_GNU_SOURCE=1
+
+# Compile-time feature switches (see README.md "Configuration options" and
+# "Building"). Each falls back to upstream's own default (0, except
+# ENABLE_OVERRIDE which defaults to 1) when left undefined; here they are
+# always given an explicit value derived from the corresponding
+# configuration variable.
+#
+c.poptions += -DENABLE_OVERRIDE=($config.librpmalloc.override ? 1 : 0)
+c.poptions += -DENABLE_STATISTICS=($config.librpmalloc.statistics ? 1 : 0)
+c.poptions += -DENABLE_VALIDATE_ARGS=($config.librpmalloc.validate_args ? 1 : 0)
+c.poptions += -DENABLE_ASSERTS=($config.librpmalloc.asserts ? 1 : 0)
+c.poptions += -DENABLE_LEAK_DETECTION=($config.librpmalloc.leak_detection ? 1 : 0)
+
+# RPMALLOC_FIRST_CLASS_HEAPS also gates the rpmalloc_heap_* declarations in
+# rpmalloc.h, so consumers must see the same value as the library was built
+# with (see export options below).
+#
+first_class_heaps = ($config.librpmalloc.first_class_heaps ? 1 : 0)
+
+c.poptions += -DRPMALLOC_FIRST_CLASS_HEAPS=$first_class_heaps
+
+# ENABLE_DYNAMIC_LINK adds a DllMain that hooks process/thread attach and
+# detach into rpmalloc_initialize()/rpmalloc_finalize()/rpmalloc_thread_*()
+# on Windows (see malloc.c); only meaningful for the shared build.
+#
+obja{*}: c.poptions += -DENABLE_DYNAMIC_LINK=0
+objs{*}: c.poptions += -DENABLE_DYNAMIC_LINK=1
 
 # Export options.
 #
 lib{rpmalloc}:
 {
-  c.export.poptions = "-I$out_root" "-I$src_root"
+  c.export.poptions = "-I$out_base" "-I$src_base" "-DRPMALLOC_FIRST_CLASS_HEAPS=$first_class_heaps"
   c.export.libs = $intf_libs
 }
 
-#liba{rpmalloc}: c.export.poptions += -DRPMALLOC_STATIC
-#libs{rpmalloc}: c.export.poptions += -DRPMALLOC_SHARED
+# rpmalloc.h leaves RPMALLOC_EXPORT empty for MSVC (no __declspec(dllexport)),
+# so a shared build has no export table there unless one is generated
+# separately. Use build2's automatic DLL symbol exporting for MSVC and
+# GNU ld's --export-all-symbols for MinGW.
+#
+libs{rpmalloc}: def{rpmalloc}: include = ($c.target.system == 'win32-msvc')
+def{rpmalloc}: libul{rpmalloc}
+
+if ($c.target.system == 'mingw32')
+  c.loptions += -Wl,--export-all-symbols
 
 # For pre-releases use the complete version to make sure they cannot
 # be used in place of another pre-release or the final version. See
@@ -31,11 +80,10 @@ if $version.pre_release
 else
   lib{rpmalloc}: bin.lib.version = "-$version.major.$version.minor"
 
-# Install into the rpmalloc/ subdirectory of, say, /usr/include/
-# recreating subdirectories.
+# Consumers include the headers unprefixed (<rpmalloc.h>, <rpnew.h>), so
+# install them flat into, say, /usr/include/ rather than a subdirectory.
 #
 h{*}:
 {
-  install         = include/rpmalloc/
-  install.subdirs = true
+  install = include/
 }

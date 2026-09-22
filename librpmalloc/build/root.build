@@ -2,6 +2,17 @@
 #
 #c.internal.scope = current
 
+# Compile-time feature switches, translated to ENABLE_* and
+# RPMALLOC_FIRST_CLASS_HEAPS preprocessor macros in rpmalloc/buildfile (see
+# README.md "Configuration options" and "Building" for what each one does).
+#
+config [bool] config.librpmalloc.override         ?= true
+config [bool] config.librpmalloc.statistics        ?= false
+config [bool] config.librpmalloc.validate_args     ?= false
+config [bool] config.librpmalloc.asserts           ?= false
+config [bool] config.librpmalloc.leak_detection    ?= false
+config [bool] config.librpmalloc.first_class_heaps ?= false
+
 using c
 
 h{*}: extension = h
