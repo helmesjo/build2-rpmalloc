@@ -6,7 +6,7 @@
 # RPMALLOC_FIRST_CLASS_HEAPS preprocessor macros in rpmalloc/buildfile (see
 # README.md "Configuration options" and "Building" for what each one does).
 #
-config [bool] config.librpmalloc.override         ?= true
+config [bool] config.librpmalloc.override          ?= true
 config [bool] config.librpmalloc.statistics        ?= false
 config [bool] config.librpmalloc.validate_args     ?= false
 config [bool] config.librpmalloc.asserts           ?= false

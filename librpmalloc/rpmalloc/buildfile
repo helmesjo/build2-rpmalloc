@@ -19,6 +19,27 @@ c.poptions =+ "-I$out_base" "-I$src_base"
 if ($c.target.system != 'win32-msvc')
   c.libs += -pthread
 
+# rpmalloc.c alone uses <stdatomic.h>, requiring C11. build2's MSVC
+# translation of c.std is a no-op, and this toolset also gates C11 atomics
+# behind an undocumented preview switch, so both flags are needed
+# explicitly (matches upstream's build/msvs/rpmalloc.vcxproj).
+#
+if ($c.class == 'msvc')
+  obj{*}: c.coptions += /std:c11 /experimental:c11atomics
+
+# On Windows, rpmalloc.c calls OpenProcessToken()/LookupPrivilegeValueA()/
+# AdjustTokenPrivileges() to enable SeLockMemoryPrivilege for large page
+# support, all from advapi32. Not exposed via rpmalloc.h/rpnew.h, so kept
+# out of export options like -pthread above.
+#
+if ($c.target.class == 'windows')
+{
+  if ($c.target.system == 'mingw32')
+    c.libs += -ladvapi32
+  else
+    c.libs += advapi32.lib
+}
+
 # glibc gates the huge/transparent-huge-page madvise() flags and a few other
 # APIs used by rpmalloc.c behind _GNU_SOURCE.
 #
